@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 if not load_dotenv(): # Load access token from .env file
     print("Warning: .env file not found or could not be loaded. Make sure PRIORLABS_API_KEY is set in the environment.")
 
+
 def run_cloud_smoke_test():
 
     print("=" * 60)
@@ -89,7 +90,6 @@ def run_cloud_smoke_test():
     print(f"Accuracy          : {accuracy:.4f}")
     print(f"Fit time (s)      : {fit_time:.2f}")
     print(f"Pred time (s)     : {pred_time:.2f}")
-    print(f"Proba time (s)    : {pred_time:.2f}")
     print(f"Test samples      : {len(y_test)}")
 
     print("\nCloud smoke test completed successfully ✔")

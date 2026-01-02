@@ -25,6 +25,7 @@ from sklearn.model_selection import train_test_split
 
 from tabpfn import TabPFNClassifier
 
+
 def run_local_smoke_test():
 
     print("=" * 60)
@@ -90,7 +91,6 @@ def run_local_smoke_test():
     print(f"Accuracy          : {accuracy:.4f}")
     print(f"Fit time (s)      : {fit_time:.2f}")
     print(f"Pred time (s)     : {pred_time:.2f}")
-    print(f"Proba time (s)    : {pred_time:.2f}")
     print(f"Test samples      : {len(y_test)}")
 
     print("\nLocal smoke test completed successfully ✔")
