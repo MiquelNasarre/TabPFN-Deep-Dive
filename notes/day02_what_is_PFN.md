@@ -79,6 +79,65 @@ After enough training if your NN architecture is good it will evetually learn to
 distribution it will be able to make accurate out-of-sample predictions on it, basically 
 performing ICL. We will later discuss how this ICL is even possible.
 
+## Why does it work? (in theory)
+
+The PFN development comes from a purely Bayesian point of view of statistics. This tells us that 
+there are some **prior** beliefs we hold on a certain probability distribution, lets call those 
+beliefs the **prior** simbolized by the probability measure $\Pi$. We will also consider 
+the support $\mathcal{P} = \{p : \Pi(p) > 0\}$ the set of distributions possible in our **prior**.
+When those beliefs are met with data, let that be a dataset $D$, we adjust our beliefs on the 
+distribution. We call $\Pi(· | D) = P(· | D, \Pi)$ for any $p\in\mathcal{P}$ the posterior, it 
+is the conditional distribution of $p$ given the data $D$ and our **prior** $\Pi$. 
+
+PFNs then focus on Posterior Predictive Distributions (PPDs), that aim to find the most likely 
+probability distribution inside a dataset based on the **prior** and dataset provided. Let 
+$\pi$ be a function induced by the **prior** $\Pi$, that generates PPDs by 
+$\pi(·|x,D): Y \rightarrow [0,1]$ for a given dataset $D$ and particular case $x$. This function 
+will take a label $y\in Y$ as an input and will output the probability of $x$ having that label
+given the **prior** belief, the dataset provided $D$ and the particular case $x$, it has the 
+following form:
+
+$$
+\pi(y|x,D) = \int_{p\in\mathcal{P}} p(y|x) d\Pi(p|D)
+$$
+
+This shows that PPDs are fully characterized by the **prior**, being simply the posterior mean
+over conditional distributions $p(y|x)$.
+
+Essentially what we want is a way of approximating $\pi$, with this background is where PFNs
+appear. PFNs rely on the fact that under log loss, the Bayes-optimal predictor is the PPD.
+Then given a parameterized function $q_\theta$ we want to use to approximate $\pi$, our training
+objective becomes 
+
+$$
+\min_\theta ​\mathbb{E}_{D\sim p(D)}​\mathbb{​E}_{(x,y)\sim D}​[−\log q_\theta​(y|x,D_\text{train}​)]
+$$
+
+This is equivalent to minimizing negative log likelihood, and can be done via SGD. Then if $q_\theta$
+is expressive enough, and the optimization succeeds we will have an approximator of $\pi$, 
+
+$$
+q_\theta​(·|x,D)\rightarrow \pi(·|x,D)
+$$
+
+> If $D_n$ is a data set generated from $p_0$, we hope that $\Pi(p | x, D_n)$ concentrates
+> around $p_0$ as the size of $D_n$ increases. Setting a good prior is tricky in a nonparametric 
+> context. Finding a prior supporting a large enough subset of possible functions isn’t trivial. And
+> even if, the prior may wash out very slowly or not at all if it puts too much mass in unfavorable 
+> regions. But also if $p_0$ is outside the support $\mathcal{P}$ of $\Pi$, PPDs can
+> learn from data if the prior is sufficiently well-behaved.
+
+I find this section to be important in the moment to create a mindset of what PFNs are, I would 
+not consider them a NN in the common sense of trying to approximate a simple function, and I 
+will also not consider them some magical ICL machine that learns from the data provided.
+Instead I would consider them —in a Bayesian mindset— NNs that try to approximate a PPD, meaning
+that they will mimic the prior distribution on new data provided, and produce prediction models
+based on that.
+
+You can also think it on a more poetical mindset, where the training Dataset does not make the
+NN perform ICL, instead it becomes part of the PFN and its parameters, being the missing piece 
+it needed to make predictions tailored to that dataset, and that is not magical, it is by design.
+
 ## The TabPFN approach
 
 So far we have outlined the theoretical fundamentals to create and train a PFN, while avoiding 
@@ -169,65 +228,6 @@ Once they have their model generator they follow the training algorithm for a to
 steps with batches of 512 newly generated Datasets each. They use Adam optimizer with 
 linear-warmup and cosine annealing. For each training they tested a set of 3 learning rates, 
 {.001, .0003, .0001}, and used the one with the lowest final training loss.
-
-## Why does it work? (in theory)
-
-The PFN development comes from a purely Bayesian point of view of statistics. This tells us that 
-there are some **prior** beliefs we hold on a certain probability distribution, lets call those 
-beliefs the **prior** simbolized by the probability measure $\Pi$. We will also consider 
-the support $\mathcal{P} = \{p : \Pi(p) > 0\}$ the set of distributions possible in our **prior**.
-When those beliefs are met with data, let that be a dataset $D$, we adjust our beliefs on the 
-distribution. We call $\Pi(· | D) = P(· | D, \Pi)$ for any $p\in\mathcal{P}$ the posterior, it 
-is the conditional distribution of $p$ given the data $D$ and our **prior** $\Pi$. 
-
-PFNs then focus on Posterior Predictive Distributions (PPDs), that aim to find the most likely 
-probability distribution inside a dataset based on the **prior** and dataset provided. Let 
-$\pi$ be a function induced by the **prior** $\Pi$, that generates PPDs by 
-$\pi(·|x,D): Y \rightarrow [0,1]$ for a given dataset $D$ and particular case $x$. This function 
-will take a label $y\in Y$ as an input and will output the probability of $x$ having that label
-given the **prior** belief, the dataset provided $D$ and the particular case $x$, it has the 
-following form:
-
-$$
-\pi(y|x,D) = \int_{p\in\mathcal{P}} p(y|x) d\Pi(p|D)
-$$
-
-This shows that PPDs are fully characterized by the **prior**, being simply the posterior mean
-over conditional distributions $p(y|x)$.
-
-Essentially what we want is a way of approximating $\pi$, with this background is where PFNs
-appear. PFNs rely on the fact that under log loss, the Bayes-optimal predictor is the PPD.
-Then given a parameterized function $q_\theta$ we want to use to approximate $\pi$, our training
-objective becomes 
-
-$$
-\min_\theta ​\mathbbm{E}_{D\sim p(D)}​\mathbbm{​E}_{(x,y)\sim D}​[−\log q_\theta​(y|x,D_\text{train}​)]
-$$
-
-This is equivalent to minimizing negative log likelihood, and can be done via SGD. Then if $q_\theta$
-is expressive enough, and the optimization succeeds we will have an approximator of $\pi$, 
-
-$$
-q_\theta​(·|x,D)\rightarrow \pi(·|x,D)
-$$
-
-> If $D_n$ is a data set generated from $p_0$, we hope that $\Pi(p | x, D_n)$ concentrates
-> around $p_0$ as the size of $D_n$ increases. Setting a good prior is tricky in a nonparametric 
-> context. Finding a prior supporting a large enough subset of possible functions isn’t trivial. And
-> even if, the prior may wash out very slowly or not at all if it puts too much mass in unfavorable 
-> regions. But also if $p_0$ is outside the support $\mathcal{P}$ of $\Pi$, PPDs can
-> learn from data if the prior is sufficiently well-behaved.
-
-I find this section to be important in the moment to create a mindset of what PFNs are, I would 
-not consider them a NN in the common sense of trying to approximate a simple function, and I 
-will also not consider them some magical ICL machine that learns from the data provided.
-Instead I would consider them —in a Bayesian mindset— NNs that try to approximate a PPD, meaning
-that they will mimic the prior distribution on new data provided, and produce prediction models
-based on that.
-
-You can also think it on a more poetical mindset, where the training Dataset does not make the
-NN perform ICL, instead it becomes part of the PFN and its parameters, being the missing piece 
-it needed to make predictions tailored to that dataset, and that is not magical, it is by design.
 
 ## TabPFN limitations
 
