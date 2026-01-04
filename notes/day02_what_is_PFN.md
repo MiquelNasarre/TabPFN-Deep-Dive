@@ -69,8 +69,7 @@ for $j\in\{1,...,K\}$
 
 - Sample $D = D_{train}\cup D_{test} \sim p(D)$ with $D_{test} = \{ (x_i,y_i) \}_{i=1}^m$
 
-- Compute stochastic loss approximation 
-$\overline{\ell}_\theta = \sum_{i=1}^m (-\log q_\theta(y_i|x_i,D))$
+- Compute stochastic loss approximation $\overline{\ell}_\theta = \sum_{i=1}^m (-\log q_\theta(y_i|x_i,D))$
 
 - Update $\theta$ with stochastic gradient descent on $\Lambda_\theta\overline{\ell}_\theta$
 

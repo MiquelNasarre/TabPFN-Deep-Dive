@@ -176,7 +176,7 @@ to obtain the $10$ raw logits, then some post-processing steps are done we might
 discuss another day, mainly clamping to the actual number of labels you are working with, 
 adding temperature and applying softmax to turn the logits into probabilities.
 
-## Regressor
+### Regressor
 
 For the regressor the story is a bit more interesting. TabPFN proudly announces that its 
 Regressor does not output a number but instead it outputs a probabilty distribution. The 
