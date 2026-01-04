@@ -41,10 +41,10 @@ def run_tabpfn_once(
     if backend == "local":
         if task == "classification":
             from tabpfn import TabPFNClassifier
-            model = TabPFNClassifier()
+            model = TabPFNClassifier(ignore_pretraining_limits=True, device="cpu")
         else:
             from tabpfn import TabPFNRegressor
-            model = TabPFNRegressor()
+            model = TabPFNRegressor(ignore_pretraining_limits=True, device="cpu")
 
     else:
         from dotenv import load_dotenv
