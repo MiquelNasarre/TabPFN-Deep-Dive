@@ -147,8 +147,8 @@ minimizing negative log likelihood.
 This gives us an immediate road map for classifiers, since NLL is widely used and we can simply optimize 
 our NN using SGD with this loss function, but what about regressors?
 
-The TabPFN answer is simple and quite pretty, instead of outputting a single guess for regression, lets 
-actually recreate the distribution we are trying to mimic, that is evident since they function $pi$ we are
+The TabPFN answer is simple and quite pretty, instead of outputting a single guess for regression, let's 
+actually recreate the distribution we are trying to mimic, that is evident since they function $\pi$ we are
 trying to mimic outputs PPDs not numbers. How do we do that? Let's discretize the real number line in 
 $5000$ buckets and output logits for each bucket (as we saw yesterday). This way we can use NLL as our 
 loss function for those logits, and keep true to the Bayesian foundations of our model.
