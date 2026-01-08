@@ -40,3 +40,6 @@ outputs/
 data/raw/
 data/processed/
 data/synthetic/
+
+# Private folder
+private/
