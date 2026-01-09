@@ -28,7 +28,9 @@ that I specifically trained my ensemble for, it is always nice to see profits, s
 obtained without compromising much the Sharpe ratio metric that is also considered positive. Daily profits 
 are computed via the formula
 
-$$\text{log_profits} = \text{log_returns} · \text{position} + \text{log_risk_free} · (1 - \text{position})$$,
+$$
+\text{log_profits} = \text{log_returns} · \text{position} + \text{log_risk_free} · (1 - \text{position}),
+$$
 
 then cumulatively summed to obtain strategy profits on the test set.
 
