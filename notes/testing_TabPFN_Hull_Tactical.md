@@ -29,7 +29,7 @@ obtained without compromising much the Sharpe ratio metric that is also consider
 are computed via the formula
 
 $$
-\text{log_profits} = \text{log_returns} · \text{position} + \text{log_risk_free} · (1 - \text{position}),
+\text{log profits} = \text{log returns} · \text{position} + \text{log risk free} · (1 - \text{position}),
 $$
 
 then cumulatively summed to obtain strategy profits on the test set.
