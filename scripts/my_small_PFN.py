@@ -69,7 +69,7 @@ class FeedForward(nn.Module):
 
     def forward(self, emb: torch.Tensor) -> torch.Tensor:
         # Do feed-forward step
-        return self.mlp(emb)
+        return self.mlp(emb) # (B, S+T, Fg+1, emb_dim)
     
 
 class Layer(nn.Module):
@@ -90,35 +90,35 @@ class Layer(nn.Module):
         self.layer_norm_ff = nn.LayerNorm(config.embedded_dimension)
 
     def forward(self, emb: torch.Tensor, test_size: int) -> torch.Tensor:
-        B, S, Fg1, E = emb.shape # (B, S, Fg+1, emb_dim)
+        B, S, Fg1, E = emb.shape # (B, S+T, Fg+1, emb_dim)
 
         # Reshape to create feature attention input
-        f_attn_in = emb.reshape([B*S, Fg1, E]) # (B*S, Fg+1, emb_dim)
+        f_attn_in = emb.reshape([B*S, Fg1, E]) # (B*(S+T), Fg+1, emb_dim)
         # Run feture attention
-        f_attn_out = self.feature_attn(f_attn_in) # (B*S, Fg+1, emb_dim)
+        f_attn_out = self.feature_attn(f_attn_in) # (B*(S+T), Fg+1, emb_dim)
         # Add residual and layer normalize
-        res_f_attn_out = self.layer_norm_fa(f_attn_out + f_attn_in) # (B*S, Fg+1, emb_dim)
+        res_f_attn_out = self.layer_norm_fa(f_attn_out + f_attn_in) # (B*(S+T), Fg+1, emb_dim)
 
         # Create attention mask for row attention (test attends to train, train attends to train)
         mask = torch.zeros([S, S], dtype=torch.float32, device=emb.device)
         mask[:,-test_size:] = float('-inf')
 
         # Reshape and transpose to create row attention input
-        r_attn_in = res_f_attn_out.reshape([B, S, Fg1, E]).transpose(1,2).reshape([B*Fg1, S, E]) # (B*(Fg+1), S, emb_dim)
+        r_attn_in = res_f_attn_out.reshape([B, S, Fg1, E]).transpose(1,2).reshape([B*Fg1, S, E]) # (B*(Fg+1), S+T, emb_dim)
         # Run row attention
-        r_attn_out = self.row_attn(r_attn_in, mask) # (B*(Fg+1), S, emb_dim)
+        r_attn_out = self.row_attn(r_attn_in, mask) # (B*(Fg+1), S+T, emb_dim)
         # Add residual and layer normalize
-        res_r_attn_out = self.layer_norm_ra(r_attn_out + r_attn_in) # (B*(Fg+1), S, emb_dim)
+        res_r_attn_out = self.layer_norm_ra(r_attn_out + r_attn_in) # (B*(Fg+1), S+T, emb_dim)
 
         # Reshape and transpose back to original shape for feed-forward input
-        ff_in = res_r_attn_out.reshape([B, Fg1, S, E]).transpose(1,2) # (B, S, Fg+1, emb_dim)
+        ff_in = res_r_attn_out.reshape([B, Fg1, S, E]).transpose(1,2) # (B, S+T, Fg+1, emb_dim)
         # Run feed-forward
-        ff_out = self.feed_forward(ff_in) # (B, S, Fg+1, emb_dim)
+        ff_out = self.feed_forward(ff_in) # (B, S+T, Fg+1, emb_dim)
         # Add residual and layer normalize
-        layer_out = self.layer_norm_ff(ff_out + ff_in) # (B, S, Fg+1, emb_dim)
+        layer_out = self.layer_norm_ff(ff_out + ff_in) # (B, S+T, Fg+1, emb_dim)
 
         # Return layer output
-        return layer_out # (B, S, Fg+1, emb_dim)
+        return layer_out # (B, S+T, Fg+1, emb_dim)
 
 
 class Transformer(nn.Module):
@@ -136,8 +136,8 @@ class Transformer(nn.Module):
 
         # Iterate through the layers and return
         for layer in self.layers:
-            trans_in = layer(trans_in, test_size)
-        return trans_in
+            trans_in = layer(trans_in, test_size) 
+        return trans_in # (B, S+T, Fg+1, emb_dim)
 
 
 class EncoderX(nn.Module):
@@ -156,16 +156,9 @@ class EncoderX(nn.Module):
         )
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-
-        # Unsqueeze assuming batch size is 1. (B, S, F)
-        if X.dim() == 1:
-            X = X.view([1, X.shape[0], 1])
-
-        if X.dim() == 2:
-            X = X.view([1, X.shape[0], X.shape[1]])
         
         # Store initial shape
-        B, S, F = X.shape
+        B, S, F = X.shape # (B, S, F)
 
         # Append missing columns for feature group creation
         residue = F % self.group_size
@@ -197,21 +190,8 @@ class EncoderY(nn.Module):
 
     def forward(self, y: torch.Tensor, test_size: int) -> torch.Tensor:
 
-        # Unsqueeze assuming batch size is 1. (B, train_size, 1)
-        if y.dim() == 1:
-            y = y.view([1, y.shape[0], 1])
-
-        if y.dim() == 2:
-            if y.shape[1] != 1:
-                raise RuntimeError(
-                    "Multiple target predictions are not supported. " \
-                    f"Found target tensor of shape {y.shape}. " \
-                    "If batch size is bigger than 1 the input is to be of shape (B, S, 1)."
-                    )
-            y = y.view([1, y.shape[0], y.shape[1]])
-
         # Store initial shape
-        B, train_size, _ = y.shape
+        B, train_size, _ = y.shape # (B, train_size, 1)
 
         # Append missing rows to y
         y = torch.cat([y, torch.zeros([B, test_size, 1], dtype=torch.float32, device=y.device)], dim=1) # (B, S, 1)
@@ -285,6 +265,179 @@ class MyRegressorPFN(nn.Module):
     def forward(self):
         raise RuntimeError("This Module does not support forward passes, use fit() and predict() instead.")
 
+    def reshape_concatenate_pre_encoder(
+            device: str, 
+            X_train: torch.Tensor, 
+            y_train: torch.Tensor, 
+            X_test: torch.Tensor
+        ) -> list[torch.Tensor, torch.Tensor, int]:
+        
+        # Make sure your data are torch tensors
+        X_train = torch.as_tensor(X_train, dtype=torch.float32, device=device) # (B?, train_size, F?)
+        y_train = torch.as_tensor(y_train, dtype=torch.float32, device=device) # (B?, train_size, 1?)
+        X_test  = torch.as_tensor(X_test,  dtype=torch.float32, device=device) # (B?, test_size?, F?)
+
+        # Reshape X_train tp match format (B, train_size, F)
+        if X_train.dim() == 2:
+            # For inference simplicity we will assume batch size to be 1
+            # If you want multiple batches you will need to provide the full format
+            X_train = X_train.unsqueeze(dim=0)
+        elif X_train.dim() == 1:
+            # For inference simplicity we will assume batch size is 1 and there is only 1 feature
+            # A single training example case is rara so if that is the format it should be explicitly 
+            # provided at least as a tensor of shape (1, F)
+            X_train = X_train.unsqueeze(dim=0).unsqueeze(dim=-1)
+        elif X_train.dim() != 3:
+            # Sanity check
+            raise RuntimeError(
+                "Missmatch in shape of tensors found during preprocessing." \
+                "X_train can only have 1, 2 or 3 dimensions."
+            )
+
+        # Store shape
+        B, train_size, F = X_train.shape
+
+        # Reshape y_train to match format (B, train_size, 1)
+        if y_train.dim() == 3:
+            # Dimensions must exactly match
+            if y_train.shape[0] != B or y_train.shape[1] != train_size or y_train.shape[2] != 1:
+                raise RuntimeError(
+                    "Missmatch in shape of tensors found during preprocessing." \
+                    "If X_train is of shape (B,train_size,F), a 3 dimensional y_train must exactly match the format (B, train_size, 1)."
+                )
+        elif y_train.dim() == 2:
+            if B > 1:
+                # Dimensions must be (B, train_size)
+                if y_train.shape[0] != B or y_train.shape[1] != train_size:
+                    raise RuntimeError(
+                        "Missmatch in shape of tensors found during preprocessing." \
+                        "If X_train has batch size bigger than 1, a 2 dimensional y_train must exactly match the format (B, train_size/1)."
+                    )
+                y_train = y_train.unsqueeze(dim=-1) # (B, train_size, 1)
+            else: # train_size must match and the other dimension should be 1
+                if y_train.shape[0] == train_size and y_train.shape[1] == 1:
+                    y_train = y_train.unsqueeze(dim=0) # (B=1, train_size, 1)
+                elif y_train.shape[0] == 1 and y_train.shape[1] == train_size:
+                    y_train = y_train.unsqueeze(dim=-1) # (B=1, train_size, 1)
+                else:
+                    raise RuntimeError(
+                        "Missmatch in shape of tensors found during preprocessing." \
+                        "If X_train has batch size 1, a 2 dimensional y_train must be of shape (train_size, 1) or (1, train_size)."
+                    )
+        elif y_train.dim() == 1:
+            if B > 1:
+                if y_train.shape[0] != B:
+                    raise RuntimeError(
+                        "Missmatch in shape of tensors found during preprocessing." \
+                        "If X_train has batch size bigger than 1, y_train must match the batch size."
+                    )
+                # train_size can not be more than 1
+                if train_size > 1:
+                    raise RuntimeError(
+                        "Missmatch in shape of tensors found during preprocessing." \
+                        "If X_train has batch size and train_size bigger than 1, y_train can not be one dimensional."
+                    )
+                # Assume format (B,)
+                X_test = X_test.view([B, 1, 1]) # (B, train_size=1, 1)
+            else: # train_size must match
+                if y_train.shape[0] != train_size:
+                    raise RuntimeError(
+                        "Missmatch in shape of tensors found during preprocessing." \
+                        "If X_train has train_size bigger than 1, y_train must contain the same train_size."
+                    )
+                # Assume format (train_size,)
+                X_test = X_test.view([1, train_size, 1]) # (B=1, train_size, 1)
+        else:
+            # Sanity check
+            raise RuntimeError(
+                "Missmatch in shape of tensors found during preprocessing." \
+                "y_train can only have 1, 2 or 3 dimensions."
+            )
+
+        # Reshape X_test tp match format (B, test_size, F)
+        if X_test.dim() == 3:
+            if X_test.shape[0] != B or X_test.shape[2] != F:
+                raise RuntimeError(
+                    "Missmatch in shape of tensors found during preprocessing." \
+                    "If X_train is of shape (B,train_size,F), X_test with 3 dimensions must match B and F."
+                )
+        elif X_test.dim() == 2:
+            if B > 1:
+                # Batch size must match on both tensors
+                if X_test.shape[0] != B:
+                    raise RuntimeError(
+                        "Missmatch in shape of tensors found during preprocessing." \
+                        "If X_train has batch size bigger than 1, X_test must match the batch size."
+                    )
+                if F > 1: # Expect format (B, F) with test size 1
+                    if X_test.shape[1] == F:
+                        X_test = X_test.view([B, 1, F]) # (B, test_size=1, F)
+                    else:
+                        raise RuntimeError(
+                            "Missmatch in shape of tensors found during preprocessing." \
+                            "If X_train has a number of features bigger than 1, X_test must match the number of features."
+                        )
+                else: # Assume format (B, test_size) works if test_size is 1 as well
+                    X_test = X_test.view([B, -1, 1]) # (B, test_size, F=1)
+            else:
+                if X_test.shape[1] == F: # Assume format (test_size, F) works if test_size is 1 and if F is 1 as well
+                    X_test = X_test.view([1, -1, F])
+                else:
+                    if F > 1:
+                        raise RuntimeError(
+                            "Missmatch in shape of tensors found during preprocessing." \
+                            "If X_train has a number of features bigger than 1, X_test must match the number of features."
+                        )
+                    if X_test.shape[0]>1:
+                        raise RuntimeError(
+                            "Missmatch in shape of tensors found during preprocessing." \
+                            "X_train has 1 feature and batch size 1, if X_test is 2 dimensional at least one dimension must be 1."
+                        )
+                    # Assume shape (B=1, test_size)
+                    X_test = X_test.view([1, -1, 1]) # (B=1, test_size, F=1)
+        elif X_test.dim() == 1:
+            if B > 1:
+                # Batch size must match on both tensors
+                if X_test.shape[0] != B:
+                    raise RuntimeError(
+                        "Missmatch in shape of tensors found during preprocessing." \
+                        "If X_train has batch size bigger than 1, X_test must match the batch size."
+                    )
+                # Feature length can not be more than 1
+                if F > 1:
+                    raise RuntimeError(
+                        "Missmatch in shape of tensors found during preprocessing." \
+                        "If X_train has batch size bigger than 1 and more than one feature, X_test can not be one dimensional."
+                    )
+                # Assume format (B,) and with test_size 1
+                X_test = X_test.view([B, 1, 1]) # (B, test_size=1, F=1)
+            elif F > 1:
+                # Feature lenght must match
+                if X_test.shape[0] != F:
+                    raise RuntimeError(
+                        "Missmatch in shape of tensors found during preprocessing." \
+                        "If X_train has a number of features bigger than 1, X_test must match the number of features."
+                    )
+                # Assume format (F,) and with test_size 1
+                X_test = X_test.view([1, 1, F]) # (B=1, test_size=1, F)
+            else: # Assumbe format (test_size,)
+                X_test = X_test.view([1, -1, 1]) # (B=1, test_size, F=1)
+        else:
+            # Sanity check
+            raise RuntimeError(
+                "Missmatch in shape of tensors found during preprocessing." \
+                "X_test can only have 1, 2 or 3 dimensions."
+            )
+
+        # Get test size
+        test_size = X_test.shape[1]
+
+        # Concatenate sets
+        X = torch.cat([X_train, X_test], dim = -2) # (B, S = train_size + test_size, F)
+
+        # Return preprocessed tensors and test size
+        return X, y_train, test_size
+
     def fit(self, X_train: torch.Tensor, y_train: torch.Tensor) -> MyRegressorPFN:
 
         # Store training tensors for inference
@@ -300,27 +453,14 @@ class MyRegressorPFN(nn.Module):
         if not hasattr(self, 'X_train'):
             raise RuntimeError("Please call fit() before calling predict().")
 
-        # Make sure your data are torch tensors
-        self.X_train = torch.as_tensor(self.X_train, dtype=torch.float32, device=self.config.device) # (B?, train_size, F?)
-        self.y_train = torch.as_tensor(self.y_train, dtype=torch.float32, device=self.config.device) # (B?, train_size, 1?)
-        X_test       = torch.as_tensor(      X_test, dtype=torch.float32, device=self.config.device) # (B?, test_size?, F?)
-
-        # Reshape assuming missing dimension means test_size is 1 (B?, test_size, F)
-        if self.X_train.dim() == 2 and X_test.dim() == 1:
-            X_test = X_test.view([1, -1])
-
-        if self.X_train.dim() == 3 and X_test.dim() == 2:
-            X_test = X_test.view([X_test.shape[0], 1, -1])
-        
-        # Get test size
-        test_size = X_test.shape[-2]
-
-        # Concatenate sets, error will occur if shapes missmatch
-        X = torch.cat([self.X_train, X_test], dim = -2) # (B?, S = train_size + test_size, F)
+        # Preprocess tensors for encoders
+        X, y, test_size = self.reshape_concatenate_pre_encoder(
+            self.config.device, self.X_train, self.y_train, X_test
+        )
 
         # Encode X and y
-        emb_X = self.encoder_x(X)                        # (B, S, Fg, emb_dim)
-        emb_y = self.encoder_y(self.y_train, test_size)  # (B, S,  1, emb_dim)
+        emb_X = self.encoder_x(X)             # (B, S, Fg, emb_dim)
+        emb_y = self.encoder_y(y, test_size)  # (B, S,  1, emb_dim)
 
         # Concatenate vectors to obtain the input tokens
         emb = torch.cat([emb_X,emb_y], dim = 2) # (B, S, Fg+1, emb_dim)
@@ -328,7 +468,7 @@ class MyRegressorPFN(nn.Module):
         # Add thinking rows to get the final transformer input
         if self.config.n_thinking_rows != 0:
             B, _, Fg1, _ = emb.shape
-            # Create thinking rows
+            # Create thinking rows # (B, T, Fg+1, emb_dim)
             thinking_rows = torch.zeros(
                 [B, self.config.n_thinking_rows, Fg1, self.config.embedded_dimension], 
                 dtype=torch.float32, device=self.config.device
@@ -336,26 +476,26 @@ class MyRegressorPFN(nn.Module):
             # Give all thinking tokens the learned thinking token value
             thinking_rows[:,:,:] = self.thinking_token
             # Concatenate
-            trans_in = torch.cat([thinking_rows, emb], dim = 1)
+            trans_in = torch.cat([thinking_rows, emb], dim = 1) # (B, S+T, Fg+1, emb_dim)
         else:
             trans_in = emb
 
         # Send tokens through the transformer
-        trans_out = self.transformer(trans_in, test_size)
+        trans_out = self.transformer(trans_in, test_size) # (B, S+T, Fg+1, emb_dim)
 
         # Get logits from the decoder
-        logits = self.decoder(trans_out, test_size)
+        logits = self.decoder(trans_out, test_size) # (B, test_size, n_buckets)
 
         # Apply temperature if required
         if self.config.temperature != 1.0:
-            logits /= self.config.temperature
+            logits /= self.config.temperature # (B, test_size, n_buckets)
 
         # Return corresponding output
         if output == 'logits':
-            return logits
+            return logits # (B, test_size, n_buckets)
 
         if output == 'probs' or output == 'probabilities':
-            return torch.softmax(logits, dim=-1)
+            return torch.softmax(logits, dim=-1) # (B, test_size, n_buckets)
         
-        return logits
+        raise RuntimeError(f"Unknown output type found: {output}")
     
