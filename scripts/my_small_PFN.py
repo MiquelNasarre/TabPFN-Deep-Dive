@@ -11,7 +11,7 @@ class ModelConfig:
     Class that stores the hyper-parameters for the creation of the PFN.
     Includes general dimensions and metadata like the embedded dimension,
     number of heads, hidden dimensions, etc.
-    
+
     It also inlculdes two user knobs, the temperature and the device.
     '''
 
@@ -445,28 +445,28 @@ class Layer(nn.Module):
         self.layer_norm_ff = nn.LayerNorm(config.embedded_dimension)
 
     def forward(self, emb: torch.Tensor, test_size: int) -> torch.Tensor:
-        B, S, Fg1, E = emb.shape # (B, S+T, Fg+1, emb_dim)
+        B, ST, Fg1, E = emb.shape # (B, S+T, Fg+1, emb_dim)
 
         # Reshape to create feature attention input
-        f_attn_in = emb.reshape([B*S, Fg1, E]) # (B*(S+T), Fg+1, emb_dim)
+        f_attn_in = emb.reshape([B*ST, Fg1, E]) # (B*(S+T), Fg+1, emb_dim)
         # Run feature attention
         f_attn_out = self.feature_attn(f_attn_in) # (B*(S+T), Fg+1, emb_dim)
         # Add residual and layer normalize
         res_f_attn_out = self.layer_norm_fa(f_attn_out + f_attn_in) # (B*(S+T), Fg+1, emb_dim)
 
         # Create attention mask for row attention (test attends to train, train attends to train)
-        mask = torch.zeros([S, S], dtype=emb.dtype, device=emb.device)
+        mask = torch.zeros([ST, ST], dtype=emb.dtype, device=emb.device)
         mask[:,-test_size:] = float('-inf')
 
         # Reshape and transpose to create row attention input
-        r_attn_in = res_f_attn_out.reshape([B, S, Fg1, E]).transpose(1,2).contiguous().reshape([B*Fg1, S, E]) # (B*(Fg+1), S+T, emb_dim)
+        r_attn_in = res_f_attn_out.reshape([B, ST, Fg1, E]).transpose(1,2).contiguous().reshape([B*Fg1, ST, E]) # (B*(Fg+1), S+T, emb_dim)
         # Run row attention
         r_attn_out = self.row_attn(r_attn_in, mask) # (B*(Fg+1), S+T, emb_dim)
         # Add residual and layer normalize
         res_r_attn_out = self.layer_norm_ra(r_attn_out + r_attn_in) # (B*(Fg+1), S+T, emb_dim)
 
         # Reshape and transpose back to original shape for feed-forward input
-        ff_in = res_r_attn_out.reshape([B, Fg1, S, E]).transpose(1,2).contiguous() # (B, S+T, Fg+1, emb_dim)
+        ff_in = res_r_attn_out.reshape([B, Fg1, ST, E]).transpose(1,2).contiguous() # (B, S+T, Fg+1, emb_dim)
         # Run feed-forward
         ff_out = self.feed_forward(ff_in) # (B, S+T, Fg+1, emb_dim)
         # Add residual and layer normalize
@@ -553,7 +553,7 @@ class EncoderY(nn.Module):
     for the embedding.
 
     The forward pass appends the test rows, creates the mask to encode
-    them rows and concatenates it to the input, then applies the encoding 
+    them and concatenates it to the input, then applies the encoding 
     to output the embedded target tokens.
 
     Dimensions are specified by the PFN given the ModelConfig.
