@@ -14,8 +14,8 @@ each module does:
 
 #### Preprocessing
 
-Final Shapes: $X \rightarrow (B, S = train_size + test_size, F)$, 
-$y \rightarrow (B, train_size, 1)$
+Final Shapes: $X \rightarrow (B, S = train size + test size, F)$, 
+$y \rightarrow (B, train size, 1)$
 
 We start by the preprocessing of the data. This in TabPFN is a resource heavy step,
 but since we aim to simplify the overall flow we assume that the data has already been
@@ -24,7 +24,7 @@ matching and preparing the $X$ and $y$ tensors for the encoders.
 
 #### Encoder X
 
-Final Shapes: $X_emb \rightarrow (B, S, Fg, E)$
+Final Shapes: $X_emb \rightarrow (B, S, F_g, E)$
 
 This step splits the tensor features into feature groups, padding with empty features 
 and scaling if necessary to make sure all groups contain the same amount of features, 
@@ -43,7 +43,7 @@ embedded target tokens, reshaping them to match the embedded $X$ format.
 
 #### Concatenate and add thinking rows
 
-Final Shapes: $trans_in \rightarrow (B, S+T, Fg+1, E)$
+Final Shapes: $trans_in \rightarrow (B, S+T, F_g+1, E)$
 
 To create the transformer input the embedded $X$ and $y$ tensors are concatenated along
 the feature dimension, and then the thinking rows are prepended. Each row has a learned 
@@ -52,11 +52,11 @@ TabPFN for the thinking tokens.
 
 #### Transformer/Layer/Double Attention/Feed Forward
 
-Final Shapes: $trans_out \rightarrow (B, S+T, Fg+1, E)$
+Final Shapes: $trans_out \rightarrow (B, S+T, F_g+1, E)$
 
 Since the transformer architecture has already been covered in detail I will keep the 
 explanation brief. But basically it performs attention first between the different feature 
-groups in each row (across $Fg+1$), and then it performs attention between the different 
+groups in each row (across $F_g+1$), and then it performs attention between the different 
 rows for each feature group (across $S+T$). This is done simply by transposing and reshaping 
 the embedded tensor.
 
@@ -65,7 +65,7 @@ So every layer does: feature attention, row attention, feed forward.
 
 #### Decoder
 
-Final Shapes: $logits \rightarrow (B, test_size, n_buckets)$
+Final Shapes: $logits \rightarrow (B, test size, num buckets)$
 
 Mimicking TabPFN-2.5 Regressor the output is a probability distribution for the target 
 given by a discretization of the real number line in buckets.
