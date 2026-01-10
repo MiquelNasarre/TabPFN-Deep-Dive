@@ -24,7 +24,7 @@ matching and preparing the $X$ and $y$ tensors for the encoders.
 
 #### Encoder X
 
-Final Shapes: $X_emb \rightarrow (B, S, F_g, E)$
+Final Shapes: $X_{emb} \rightarrow (B, S, F_g, E)$
 
 This step splits the tensor features into feature groups, padding with empty features 
 and scaling if necessary to make sure all groups contain the same amount of features, 
@@ -35,7 +35,7 @@ so instead of holding a vector of tokens per batch, we hold a matrix of tokens p
 
 #### Encoder y
 
-Final Shapes: $y_emb \rightarrow (B, S, 1, E)$
+Final Shapes: $y_{emb} \rightarrow (B, S, 1, E)$
 
 This step appends the test rows as zeroed tensors, creates the mask to encode them as 
 empty and concatenates it to the tensor, and then applies the encoding to output the 
@@ -43,7 +43,7 @@ embedded target tokens, reshaping them to match the embedded $X$ format.
 
 #### Concatenate and add thinking rows
 
-Final Shapes: $trans_in \rightarrow (B, S+T, F_g+1, E)$
+Final Shapes: $trans_{in} \rightarrow (B, S+T, F_g+1, E)$
 
 To create the transformer input the embedded $X$ and $y$ tensors are concatenated along
 the feature dimension, and then the thinking rows are prepended. Each row has a learned 
@@ -52,7 +52,7 @@ TabPFN for the thinking tokens.
 
 #### Transformer/Layer/Double Attention/Feed Forward
 
-Final Shapes: $trans_out \rightarrow (B, S+T, F_g+1, E)$
+Final Shapes: $trans_{out} \rightarrow (B, S+T, F_g+1, E)$
 
 Since the transformer architecture has already been covered in detail I will keep the 
 explanation brief. But basically it performs attention first between the different feature 
